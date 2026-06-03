@@ -41,3 +41,9 @@ class ServerOut(BaseModel):
             port=server.port,
             status=server.status
         )
+
+
+class AlertConfig(BaseModel):
+    """Pydantic model for alert configuration."""
+    cpu_threshold: float = Field(default=85.0, ge=0.0, le=100.0)
+    memory_threshold: float = Field(default=90.0, ge=0.0, le=100.0)

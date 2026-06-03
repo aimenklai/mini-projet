@@ -253,3 +253,53 @@ def test_server_out_from_server(cleanup_servers):
     assert server_out.id == "test-123"
     assert server_out.name == "My Server"
     assert server_out.status == "UP"
+
+
+def test_disk_metrics_endpoint(client, cleanup_servers):
+    """Test GET /metrics/disk endpoint returns 200 and list."""
+    response = client.get("/metrics/disk")
+    assert response.status_code == 200
+    assert isinstance(response.json(), list)
+
+
+def test_get_alert_config(client, cleanup_servers):
+    """Test GET /alerts/config returns current threshold values."""
+    response = client.get("/alerts/config")
+    assert response.status_code == 200
+    data = response.json()
+    assert "cpu_threshold" in data
+    assert "memory_threshold" in data
+
+
+def test_post_alert_config_without_key_returns_403(client, cleanup_servers):
+    """Test POST /alerts/config without API key fails with 403."""
+    response = client.post("/alerts/config", json={"cpu_threshold": 50, "memory_threshold": 50})
+    assert response.status_code == 403
+
+
+def test_post_alert_config_with_valid_key(client, cleanup_servers):
+    """Test POST /alerts/config with valid API key succeeds and updates values."""
+    response = client.post(
+        "/alerts/config",
+        json={"cpu_threshold": 75.0, "memory_threshold": 80.0},
+        headers={"X-API-Key": "dev-secret-key"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["cpu_threshold"] == 75.0
+    assert data["memory_threshold"] == 80.0
+
+
+def test_websocket_metrics_format(client, cleanup_servers):
+    """Test WebSocket /ws/metrics contains new metrics and alert fields."""
+    from unittest.mock import patch
+    from fastapi import WebSocketDisconnect
+    
+    with patch("api.main.asyncio.wait_for", side_effect=WebSocketDisconnect):
+        with client.websocket_connect("/ws/metrics") as websocket:
+            data = websocket.receive_json()
+            assert "cpu_percent" in data
+            assert "bytes_sent" in data
+            assert "bytes_recv" in data
+            assert "alert" in data
+            assert "alerts" in data

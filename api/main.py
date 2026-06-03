@@ -5,14 +5,15 @@ from typing import Dict, Optional
 
 from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
 from api.auth import verify_api_key
-from api.metrics import get_system_metrics
-from api.models import Server, ServerIn, ServerOut
+from api.metrics import get_system_metrics, get_disk_partitions_metrics
+from api.models import Server, ServerIn, ServerOut, AlertConfig
 from api.poller import run_poll_loop
 
 
 # In-memory server store
 servers: Dict[str, Server] = {}
 poll_task: Optional[asyncio.Task] = None
+alert_config = AlertConfig(cpu_threshold=85.0, memory_threshold=90.0)
 
 
 @asynccontextmanager
@@ -55,6 +56,29 @@ async def metrics():
     return get_system_metrics()
 
 
+@app.get("/metrics/disk")
+async def disk_metrics():
+    """Get disk partition metrics."""
+    return get_disk_partitions_metrics()
+
+
+@app.get("/alerts/config", response_model=AlertConfig)
+async def get_alert_config():
+    """Get current alert threshold configuration."""
+    return alert_config
+
+
+@app.post("/alerts/config", response_model=AlertConfig)
+async def update_alert_config(
+    config: AlertConfig,
+    _: str = Depends(verify_api_key)
+):
+    """Update alert threshold configuration."""
+    global alert_config
+    alert_config = config
+    return alert_config
+
+
 @app.websocket("/ws/metrics")
 async def websocket_metrics(websocket: WebSocket):
     """
@@ -64,8 +88,27 @@ async def websocket_metrics(websocket: WebSocket):
     try:
         while True:
             metrics_data = get_system_metrics()
+            
+            # Check thresholds for alert status
+            cpu_alert = metrics_data["cpu_percent"] > alert_config.cpu_threshold
+            mem_alert = metrics_data["memory_percent"] > alert_config.memory_threshold
+            
+            metrics_data["alert"] = cpu_alert or mem_alert
+            metrics_data["alerts"] = {
+                "cpu": cpu_alert,
+                "memory": mem_alert
+            }
+            
             await websocket.send_json(metrics_data)
-            await asyncio.sleep(1)
+            
+            # Wait for 1 second while monitoring for client disconnects
+            try:
+                await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
+            except asyncio.TimeoutError:
+                # Normal path: continue to next iteration
+                continue
+            except WebSocketDisconnect:
+                break
     except WebSocketDisconnect:
         pass
     except Exception as e:
