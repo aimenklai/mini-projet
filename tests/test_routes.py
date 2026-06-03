@@ -209,3 +209,47 @@ def test_check_nonexistent_server_returns_404(client, cleanup_servers):
     """Test POST /servers/{nonexistent_id}/check returns 404."""
     response = client.post("/servers/nonexistent-id/check")
     assert response.status_code == 404
+
+
+def test_multiple_servers_polling(client, cleanup_servers):
+    """Test multiple servers can be registered and polled."""
+    # Register multiple servers
+    for i in range(3):
+        response = client.post(
+            "/servers",
+            json={"name": f"Server {i}", "host": "localhost", "port": 8000 + i},
+            headers={"X-API-Key": "dev-secret-key"}
+        )
+        assert response.status_code == 201
+    
+    # List all servers
+    response = client.get("/servers")
+    assert response.status_code == 200
+    assert len(response.json()) == 3
+
+
+def test_server_with_invalid_name_fails(client, cleanup_servers):
+    """Test that empty name is rejected."""
+    response = client.post(
+        "/servers",
+        json={"name": "", "host": "localhost", "port": 8000},
+        headers={"X-API-Key": "dev-secret-key"}
+    )
+    assert response.status_code == 422
+
+
+def test_server_base_url_method(cleanup_servers):
+    """Test Server.base_url() method."""
+    from api.models import Server
+    server = Server(id="test", name="Test", host="example.com", port=3000)
+    assert server.base_url() == "http://example.com:3000"
+
+
+def test_server_out_from_server(cleanup_servers):
+    """Test ServerOut.from_server() conversion."""
+    from api.models import Server, ServerOut
+    server = Server(id="test-123", name="My Server", host="localhost", port=8080, status="UP")
+    server_out = ServerOut.from_server(server)
+    assert server_out.id == "test-123"
+    assert server_out.name == "My Server"
+    assert server_out.status == "UP"
