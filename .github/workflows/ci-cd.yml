@@ -75,12 +75,12 @@ jobs:
         run: |
           az containerapp update \
             --name devops-monitor-api \
-            --resource-group dernierexo-fc-rg \
+            --resource-group dernierexo_group \
             --image ${{ secrets.ACR_NAME }}.azurecr.io/devops-monitor-api:${{ github.sha }}
 
       - name: Deploy Dashboard to Container App
         run: |
           az containerapp update \
             --name devops-monitor-dashboard \
-            --resource-group dernierexo-fc-rg \
+            --resource-group dernierexo_group \
             --image ${{ secrets.ACR_NAME }}.azurecr.io/devops-monitor-dashboard:${{ github.sha }}
