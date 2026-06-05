@@ -282,7 +282,7 @@ with tab1:
     disk_placeholder = st.empty()
 
     # Connect and stream
-    ws_url = f"{API_URL.replace('http://', 'ws://')}/ws/metrics"
+    ws_url = f"{API_URL.replace('https://', 'wss://').replace('http://', 'ws://')}/ws/metrics"
 
     try:
         ws = websocket.create_connection(ws_url, timeout=5)
