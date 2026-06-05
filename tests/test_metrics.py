@@ -1,4 +1,3 @@
-import pytest
 from api.metrics import get_system_metrics
 
 
@@ -11,7 +10,10 @@ def test_get_system_metrics_returns_dict():
 def test_get_system_metrics_contains_required_keys():
     """Test that metrics contain all required keys."""
     metrics = get_system_metrics()
-    required_keys = {"cpu_percent", "memory_percent", "disk_percent", "bytes_sent", "bytes_recv"}
+    required_keys = {
+        "cpu_percent", "memory_percent", "disk_percent",
+        "bytes_sent", "bytes_recv"
+    }
     assert required_keys.issubset(metrics.keys())
 
 

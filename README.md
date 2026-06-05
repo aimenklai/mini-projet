@@ -1,177 +1,212 @@
-# DevOps Monitoring Dashboard MVP
+# 📊 DevOps Monitoring Dashboard
 
-A full-stack DevOps monitoring application consisting of a FastAPI backend and Streamlit frontend for monitoring system metrics and server health.
+Système de monitoring temps réel construit entièrement en Python, conteneurisé avec Docker, et déployé sur Azure via un pipeline CI/CD GitHub Actions.
 
-## Features
+---
 
-- **FastAPI Backend**: Exposes system metrics (CPU, Memory, Disk) and manages monitored servers
-- **Streamlit Dashboard**: Real-time visualization of system metrics and server status management
-- **Health Checks**: Background polling of monitored servers with status tracking
-- **WebSocket Support**: Live metrics streaming via WebSocket
-- **API Key Authentication**: Secured endpoints with X-API-Key header
-- **Comprehensive Tests**: Unit and integration tests with pytest
-
-## Project Structure
+## 🏗️ Architecture cible
 
 ```
-devops-monitor/
-├── api/
-│   ├── __init__.py
-│   ├── main.py          # FastAPI app entry point (lifespan, route registration)
-│   ├── models.py        # Pydantic schemas + Server dataclass
-│   ├── auth.py          # API key dependency
-│   ├── metrics.py       # psutil helper — returns a dict of system stats
-│   └── poller.py        # Background health-check logic
-├── dashboard/
-│   └── app.py           # Streamlit frontend
-├── tests/
-│   ├── test_metrics.py
-│   └── test_routes.py
-├── requirements.txt
-└── README.md
+GitHub Repository
+       │
+       ▼  push to main
+GitHub Actions CI/CD
+  ├── lint (flake8)
+  ├── test (pytest --cov ≥ 75 %)
+  ├── build & push → Azure Container Registry (ACR)
+  └── deploy → Azure Container Apps
+       │
+       ▼
+Azure Container Apps Environment
+  ├── devops-monitor-api  (FastAPI — port 8000)
+  │   ├── GET  /health                  ← liveness probe
+  │   ├── GET  /metrics                 ← CPU, mémoire, disque (psutil)
+  │   ├── WS   /ws/metrics              ← stream JSON toutes les secondes
+  │   ├── POST /servers                 ← enregistrer un serveur (API key)
+  │   ├── GET  /servers                 ← lister les serveurs + statut
+  │   ├── DELETE /servers/{id}          ← supprimer un serveur (API key)
+  │   └── POST /servers/{id}/check      ← déclencher un health check manuel
+  │
+  └── devops-monitor-dashboard  (Streamlit — port 8501)
+      ├── Onglet Métriques : KPIs + graphique live (fenêtre 60 s)
+      └── Onglet Serveurs : tableau coloré + formulaire d'enregistrement
 ```
 
-## Installation
+---
 
-1. Clone the repository:
+## 🛠️ Stack Technique
+
+* **Langage** : Python 3.11
+* **Framework API** : FastAPI + Uvicorn (ASGI)
+* **Frontend** : Streamlit (Premium Styling, Outfit Font)
+* **Client HTTP** : httpx (async)
+* **Métriques système** : psutil (non-bloquant)
+* **Authentification** : API Key via le header `X-API-Key`
+* **Conteneurisation** : Docker, Docker Compose
+* **Tests** : pytest, pytest-cov, FastAPI TestClient
+* **CI/CD** : GitHub Actions
+* **Hébergement cloud** : Azure Container Registry (ACR) + Azure Container Apps (ACA)
+
+---
+
+## 🚀 Lancement Local (Moins de 5 minutes)
+
+### Prérequis
+* Python 3.11
+* Docker & Docker Compose
+* Make (optionnel, mais recommandé)
+
+### Instructions rapides
+
+1. **Cloner le projet et se rendre dans le répertoire** :
+   ```bash
+   cd mini-projet
+   ```
+
+2. **Créer et configurer le fichier d'environnement** :
+   ```bash
+   cp .env.example .env
+   # Remplissez les valeurs (par exemple API_KEY=dev-secret-key)
+   ```
+
+3. **Démarrer la stack locale (Docker Compose)** :
+   ```bash
+   make up
+   ```
+   * *L'API sera disponible sur :* [http://localhost:8000/docs](http://localhost:8000/docs)
+   * *Le Dashboard sera disponible sur :* [http://localhost:8501](http://localhost:8501)
+
+4. **Consulter les logs** :
+   ```bash
+   make logs
+   ```
+
+5. **Arrêter la stack** :
+   ```bash
+   make down
+   ```
+
+### Commandes alternatives (Lancement hors Docker pour Dev Local)
+Pour exécuter les services séparément sans Docker :
 ```bash
-git clone https://github.com/aimenklai/mini-projet.git
-cd mini-projet
+# Lancement des tests avec couverture
+make test
+
+# Lancement du linter
+make lint
+
+# Lancement combiné des services locaux en tâche de fond
+make dev
 ```
 
-2. Create a virtual environment (optional but recommended):
+---
+
+## ⚙️ Variables d'environnement
+
+Le projet utilise les variables d'environnement suivantes à renseigner dans le fichier `.env` :
+
+* `API_KEY` : Clé d'API partagée permettant de sécuriser les endpoints d'écriture/suppression de l'API. (Défaut : `dev-secret-key`).
+* `API_BASE_URL` : URL de l'API cible que le Dashboard Streamlit va interroger.
+  * En local hors Docker : `http://localhost:8000`
+  * En local sous Docker Compose : `http://api:8000`
+  * En production sur Azure : `https://<nom-api>.<region>.azurecontainerapps.io`
+
+---
+
+## ☁️ Déploiement Azure (Guide Pas-à-Pas)
+
+Pour déployer cette application sur Azure, suivez les étapes manuelles ci-dessous depuis votre terminal équipé d'**Azure CLI** (`az`).
+
+### 1. Provisionner l'Infrastructure Azure
+
+Connectez-vous à Azure et configurez votre abonnement :
 ```bash
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+az login
 ```
 
-3. Install dependencies:
+Définissez le groupe de ressources et l'emplacement :
 ```bash
-pip install -r requirements.txt
+# Créer le groupe de ressources
+az group create --name devops-monitor-rg --location westeurope
+
+# Créer l'Azure Container Registry (ACR) (le nom doit être unique au monde)
+az acr create --name <votre-acr-unique> --resource-group devops-monitor-rg --sku Basic --admin-enabled true
+
+# Créer l'environnement Azure Container Apps
+az containerapp env create \
+  --name devops-monitor-env \
+  --resource-group devops-monitor-rg \
+  --location westeurope
 ```
 
-## Running the Application
+### 2. Pousser les premières images Docker sur l'ACR (Optionnel / Initial)
 
-### Start the FastAPI Backend
-
+Pour le déploiement initial des applications Container Apps, il est plus simple de pousser d'abord une image de démarrage sur votre ACR :
 ```bash
-uvicorn api.main:app --reload --port 8000
+# Connexion locale à l'ACR
+az acr login --name <votre-acr-unique>
+
+# Builder et pousser l'API
+docker build -t <votre-acr-unique>.azurecr.io/devops-monitor-api:latest -f api/Dockerfile .
+docker push <votre-acr-unique>.azurecr.io/devops-monitor-api:latest
+
+# Builder et pousser le Dashboard
+docker build -t <votre-acr-unique>.azurecr.io/devops-monitor-dashboard:latest -f dashboard/Dockerfile .
+docker push <votre-acr-unique>.azurecr.io/devops-monitor-dashboard:latest
 ```
 
-The API will be available at `http://localhost:8000`
-
-API Documentation:
-- Swagger UI: `http://localhost:8000/docs`
-- ReDoc: `http://localhost:8000/redoc`
-
-### Start the Streamlit Dashboard
-
-In a new terminal:
-
-```bash
-streamlit run dashboard/app.py
-```
-
-The dashboard will be available at `http://localhost:8501`
-
-## API Endpoints
-
-### Health & Metrics
-
-- `GET /health` - Health check
-- `GET /metrics` - Current system metrics
-- `WebSocket /ws/metrics` - Live metrics stream
-
-### Server Management
-
-- `POST /servers` - Register a new server (requires API key)
-- `GET /servers` - List all servers
-- `GET /servers/{id}` - Get specific server
-- `DELETE /servers/{id}` - Delete server (requires API key)
-- `POST /servers/{id}/check` - Trigger health check
-
-## Authentication
-
-Protected endpoints require an API key sent via the `X-API-Key` header.
-
-**Default key (local development):** `dev-secret-key`
-
-To use a custom key:
-```bash
-export API_KEY=your-secret-key
-uvicorn api.main:app --reload --port 8000
-```
-
-## Running Tests
+### 3. Créer les applications Container Apps sur Azure
 
 ```bash
-pytest tests/ -v
+# Déployer l'API Container App
+az containerapp create \
+  --name devops-monitor-api \
+  --resource-group devops-monitor-rg \
+  --environment devops-monitor-env \
+  --image <votre-acr-unique>.azurecr.io/devops-monitor-api:latest \
+  --target-port 8000 \
+  --ingress external \
+  --registry-server <votre-acr-unique>.azurecr.io \
+  --env-vars API_KEY=dev-secret-key
+
+# Récupérez l'URL (FQDN) de l'API générée par Azure (ex: https://devops-monitor-api.westeurope.azurecontainerapps.io)
+# Déployer le Dashboard Container App (remplacez <URL_API_PROD> par l'URL FQDN obtenue)
+az containerapp create \
+  --name devops-monitor-dashboard \
+  --resource-group devops-monitor-rg \
+  --environment devops-monitor-env \
+  --image <votre-acr-unique>.azurecr.io/devops-monitor-dashboard:latest \
+  --target-port 8501 \
+  --ingress external \
+  --registry-server <votre-acr-unique>.azurecr.io \
+  --env-vars API_BASE_URL=<URL_API_PROD> API_KEY=dev-secret-key
 ```
 
-For coverage report:
+### 4. Configurer les Secrets GitHub pour le pipeline CI/CD
+
+Pour automatiser le déploiement sur chaque `push` sur la branche `main`, générez un **Service Principal** Azure pour GitHub Actions :
 ```bash
-pip install pytest-cov
-pytest tests/ --cov=api -v
+az ad sp create-for-rbac --name "github-actions-devops-monitor" --role contributor \
+  --scopes /subscriptions/<votre-subscription-id>/resourceGroups/devops-monitor-rg \
+  --sdk-auth
 ```
 
-## Environment Variables
+Ajoutez les secrets suivants dans les paramètres de votre dépôt GitHub (`Settings > Secrets and variables > Actions`) :
 
-- `API_KEY` - API authentication key (default: `dev-secret-key`)
+| Secret GitHub | Valeur attendue |
+| --- | --- |
+| `AZURE_CLIENT_ID` | La valeur de `clientId` issue du JSON retourné ci-dessus |
+| `AZURE_CLIENT_SECRET` | La valeur de `clientSecret` issue du JSON retourné ci-dessus |
+| `AZURE_TENANT_ID` | La valeur de `tenantId` issue du JSON retourné ci-dessus |
+| `AZURE_SUBSCRIPTION_ID`| La valeur de `subscriptionId` issue du JSON |
+| `ACR_NAME` | Le nom de votre registre ACR (ex : `<votre-acr-unique>`) |
+| `API_KEY` | La clé secrète d'API de production |
 
-## API Key Header
+Désormais, tout push sur `main` exécutera automatiquement le pipeline CI/CD pour tester la qualité du code et mettre en ligne la dernière version.
 
-All protected endpoints require:
-```
-X-API-Key: dev-secret-key
-```
+---
 
-Example curl request:
-```bash
-curl -X POST http://localhost:8000/servers \
-  -H "Content-Type: application/json" \
-  -H "X-API-Key: dev-secret-key" \
-  -d '{"name": "My Server", "host": "localhost", "port": 8000}'
-```
+## 📈 Liens de Production (Une fois déployé)
 
-## Dashboard Features
-
-### Metrics Tab
-- Real-time CPU, Memory, and Disk usage metrics
-- Live chart showing CPU and Memory trends over the last 60 data points
-- Auto-refresh every 2 seconds
-
-### Servers Tab
-- List of all monitored servers with status indicators
-- Register new servers via form
-- Trigger immediate health checks
-- Delete servers from monitoring
-
-## Server Status
-
-- 🟢 **UP** - Server is healthy (responds to /health with 200)
-- 🟡 **DEGRADED** - Server responds with non-200 status
-- 🔴 **DOWN** - Server unreachable or connection error
-- ⚪ **unknown** - Initial state, not yet checked
-
-## Development Notes
-
-- The backend automatically starts a background polling task on startup
-- Polls all registered servers every 10 seconds
-- All system metrics use non-blocking calls to avoid event loop blocking
-- Type hints are used throughout for better IDE support and code clarity
-
-## Testing
-
-The project includes comprehensive tests:
-
-- **test_metrics.py** - Unit tests for metrics collection
-- **test_routes.py** - Integration tests for all API endpoints
-
-Run tests with:
-```bash
-pytest tests/ -v
-```
-
-## License
-
-MIT
+* **Documentation API (Swagger) :** `https://devops-monitor-api.<votre-env-id>.<region>.azurecontainerapps.io/docs`
+* **Frontend Dashboard Streamlit :** `https://devops-monitor-dashboard.<votre-env-id>.<region>.azurecontainerapps.io`

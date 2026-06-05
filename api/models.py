@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pydantic import BaseModel, Field
 
 
@@ -10,7 +10,7 @@ class Server:
     host: str
     port: int
     status: str = "unknown"
-    
+
     def base_url(self) -> str:
         """Return the base URL for this server."""
         return f"http://{self.host}:{self.port}"
@@ -30,7 +30,7 @@ class ServerOut(BaseModel):
     host: str
     port: int
     status: str
-    
+
     @staticmethod
     def from_server(server: Server) -> "ServerOut":
         """Convert Server dataclass to ServerOut model."""

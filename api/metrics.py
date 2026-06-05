@@ -4,15 +4,16 @@ import psutil
 def get_system_metrics() -> dict:
     """
     Retrieve current system metrics using psutil.
-    
+
     Returns:
-        dict: Contains cpu_percent, memory_percent, memory_gb, disk_percent, bytes_sent, bytes_recv
+        dict: Contains cpu_percent, memory_percent, memory_gb,
+              disk_percent, bytes_sent, bytes_recv
     """
     cpu_percent = psutil.cpu_percent(interval=None)
     memory = psutil.virtual_memory()
     disk = psutil.disk_usage('/')
     net_io = psutil.net_io_counters()
-    
+
     return {
         "cpu_percent": cpu_percent,
         "memory_percent": memory.percent,

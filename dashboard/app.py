@@ -5,9 +5,11 @@ from datetime import datetime
 import json
 import websocket
 
+import os
+
 # Configuration
-API_URL = "http://localhost:8000"
-API_KEY = "dev-secret-key"
+API_URL = os.getenv("API_BASE_URL", "http://localhost:8000")
+API_KEY = os.getenv("API_KEY", "dev-secret-key")
 
 st.set_page_config(page_title="DevOps Monitor Pro", layout="wide")
 
@@ -256,8 +258,10 @@ st.sidebar.subheader("Alert Thresholds")
 current_config = fetch_alert_config()
 
 with st.sidebar.form("alert_config_form"):
-    cpu_input = st.number_input("CPU Threshold (%)", min_value=0.0, max_value=100.0, value=float(current_config["cpu_threshold"]), step=5.0)
-    mem_input = st.number_input("Memory Threshold (%)", min_value=0.0, max_value=100.0, value=float(current_config["memory_threshold"]), step=5.0)
+    cpu_input = st.number_input("CPU Threshold (%)", min_value=0.0, max_value=100.0, value=float(
+        current_config["cpu_threshold"]), step=5.0)
+    mem_input = st.number_input("Memory Threshold (%)", min_value=0.0, max_value=100.0, value=float(
+        current_config["memory_threshold"]), step=5.0)
     save_alert = st.form_submit_button("Update Thresholds")
     if save_alert:
         if update_alert_config(cpu_input, mem_input):
@@ -270,27 +274,28 @@ tab1, tab2 = st.tabs(["📈 Metrics Stream", "🖥️ Monitored Servers"])
 # Tab 1: Live WebSocket Metrics Stream
 with tab1:
     st.header("Live System Performance")
-    
+
     # Placeholders for WebSockets stream updates
     alert_placeholder = st.empty()
     tiles_placeholder = st.empty()
     chart_placeholder = st.empty()
     disk_placeholder = st.empty()
-    
+
     # Connect and stream
     ws_url = f"{API_URL.replace('http://', 'ws://')}/ws/metrics"
-    
+
     try:
         ws = websocket.create_connection(ws_url, timeout=5)
-        
+
         while True:
             try:
                 msg = ws.recv()
                 metrics = json.loads(msg)
             except Exception:
-                alert_placeholder.warning("⚠️ WebSocket connection closed. Attempting reconnect...")
+                alert_placeholder.warning(
+                    "⚠️ WebSocket connection closed. Attempting reconnect...")
                 break
-                
+
             # 1. Update Alert Banner
             with alert_placeholder.container():
                 if metrics.get("alert"):
@@ -298,8 +303,11 @@ with tab1:
                     <div class="alert-card alert-danger">
                         <span class="alert-icon">⚠️</span>
                         <div class="alert-content">
-                            <strong>CRITICAL WARNING:</strong> System threshold breached!
-                            (CPU: {metrics['cpu_percent']:.1f}% vs {cpu_input}%, Memory: {metrics['memory_percent']:.1f}% vs {mem_input}%)
+                            <strong>CRITICAL WARNING:</strong> System threshold
+                            breached! (CPU: {metrics['cpu_percent']:.1f}% vs
+                            {cpu_input}%, Memory:
+                            {metrics['memory_percent']:.1f}% vs
+                            {mem_input}%)
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
@@ -312,11 +320,11 @@ with tab1:
                         </div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
+
             # 2. Update Tiles (CPU, Memory, Disk, Network)
             with tiles_placeholder.container():
                 col1, col2, col3, col4 = st.columns(4)
-                
+
                 with col1:
                     st.markdown(f"""
                     <div class="metric-card">
@@ -325,7 +333,7 @@ with tab1:
                         <div class="metric-sub">Real-time workload</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
+
                 with col2:
                     st.markdown(f"""
                     <div class="metric-card">
@@ -334,7 +342,7 @@ with tab1:
                         <div class="metric-sub">{metrics['memory_gb']:.1f} GB of RAM used</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
+
                 with col3:
                     st.markdown(f"""
                     <div class="metric-card">
@@ -343,7 +351,7 @@ with tab1:
                         <div class="metric-sub">Root volume '/' usage</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
+
                 with col4:
                     # Bytes to Megabytes conversion
                     sent_mb = metrics['bytes_sent'] / (1024 * 1024)
@@ -355,7 +363,7 @@ with tab1:
                         <div class="metric-sub">Sent / Received Bytes</div>
                     </div>
                     """, unsafe_allow_html=True)
-                    
+
             # 3. Update resource usage history chart
             metrics_with_time = {
                 "time": datetime.now(),
@@ -363,24 +371,35 @@ with tab1:
                 "Memory %": metrics['memory_percent']
             }
             st.session_state.metrics_history.append(metrics_with_time)
-            
+
             # Keep last 60 points
             if len(st.session_state.metrics_history) > 60:
                 st.session_state.metrics_history.pop(0)
-                
+
             with chart_placeholder.container():
-                st.markdown("<h3 style='margin-top: 1.5rem; margin-bottom: 0.5rem;'>📈 CPU & Memory Utilization History</h3>", unsafe_allow_html=True)
+                st.markdown(
+                    "<h3 style='margin-top: 1.5rem; "
+                    "margin-bottom: 0.5rem;'>"
+                    "📈 CPU & Memory Utilization History</h3>",
+                    unsafe_allow_html=True
+                )
                 if len(st.session_state.metrics_history) > 1:
                     chart_data = pd.DataFrame(st.session_state.metrics_history)
                     chart_data.set_index("time", inplace=True)
                     st.line_chart(chart_data[["CPU %", "Memory %"]])
-                    
+
             # 4. Display Disk Partition breakdown
             with disk_placeholder.container():
-                st.markdown("<h3 style='margin-top: 2rem; margin-bottom: 0.5rem;'>📁 Disk Partitions Breakdown</h3>", unsafe_allow_html=True)
+                st.markdown(
+                    "<h3 style='margin-top: 2rem; "
+                    "margin-bottom: 0.5rem;'>"
+                    "📁 Disk Partitions Breakdown</h3>",
+                    unsafe_allow_html=True
+                )
                 disk_data = fetch_disk_partitions()
                 if disk_data:
                     df_disk = pd.DataFrame(disk_data)
+
                     def format_bytes(b):
                         for unit in ['B', 'KB', 'MB', 'GB', 'TB']:
                             if b < 1024:
@@ -390,13 +409,17 @@ with tab1:
                     df_disk["total"] = df_disk["total"].apply(format_bytes)
                     df_disk["used"] = df_disk["used"].apply(format_bytes)
                     df_disk["free"] = df_disk["free"].apply(format_bytes)
-                    df_disk["percent"] = df_disk["percent"].apply(lambda p: f"{p:.1f}%")
+                    df_disk["percent"] = df_disk["percent"].apply(
+                        lambda p: f"{p:.1f}%")
                     st.dataframe(df_disk, use_container_width=True)
                 else:
                     st.info("No partition information retrieved.")
-                    
-    except Exception as e:
-        alert_placeholder.info("🔌 API Metrics WebSocket stream is offline. Please make sure the FastAPI backend is running.")
+
+    except Exception:
+        alert_placeholder.info(
+            "🔌 API Metrics WebSocket stream is offline. "
+            "Please make sure the FastAPI backend is running."
+        )
         if st.button("Retry connection"):
             st.rerun()
 
@@ -404,9 +427,9 @@ with tab1:
 # Tab 2: Monitored Servers management
 with tab2:
     st.header("Server Management & Status")
-    
+
     servers_list = fetch_servers()
-    
+
     if servers_list:
         servers_data = []
         for server in servers_list:
@@ -417,30 +440,33 @@ with tab2:
                 "Port": server["port"],
                 "Status": f"{get_status_color(server['status'])} {server['status']}"
             })
-        
+
         df = pd.DataFrame(servers_data)
         st.dataframe(df, use_container_width=True)
     else:
         st.info("No remote servers are currently registered for monitoring.")
-        
+
     st.divider()
-    
+
     # Registration Form
     st.subheader("➕ Register a New Server")
     with st.form("register_server_form"):
         col1, col2, col3 = st.columns(3)
-        
+
         with col1:
-            name = st.text_input("Server Name", placeholder="e.g. Production Database")
-        
+            name = st.text_input(
+                "Server Name", placeholder="e.g. Production Database")
+
         with col2:
-            host = st.text_input("Host Address", placeholder="e.g. 192.168.1.50 or localhost")
-        
+            host = st.text_input(
+                "Host Address", placeholder="e.g. 192.168.1.50 or localhost")
+
         with col3:
-            port = st.number_input("Port", min_value=1, max_value=65535, value=8000)
-            
+            port = st.number_input("Port", min_value=1,
+                                   max_value=65535, value=8000)
+
         submitted = st.form_submit_button("Add Server")
-        
+
         if submitted:
             if name and host:
                 if register_server(name, host, int(port)):
@@ -448,30 +474,34 @@ with tab2:
                     st.rerun()
             else:
                 st.error("All form fields (Name, Host, Port) are required.")
-                
+
     st.divider()
-    
+
     # Server Actions
     if servers_list:
         st.subheader("⚡ Quick Actions")
         server_options = {s["name"]: s["id"] for s in servers_list}
-        
+
         col1, col2 = st.columns(2)
-        
+
         with col1:
-            selected_server = st.selectbox("Select Server to Check", list(server_options.keys()))
+            selected_server = st.selectbox(
+                "Select Server to Check", list(server_options.keys()))
             if st.button("Trigger Immediate Health Check"):
                 server_id = server_options[selected_server]
                 if trigger_health_check(server_id):
-                    st.success(f"Health check task queued for '{selected_server}'. Refreshing...")
+                    st.success(
+                        f"Health check task queued for '{selected_server}'. Refreshing...")
                     st.cache_data.clear()
                     st.rerun()
-                    
+
         with col2:
-            delete_server_name = st.selectbox("Select Server to Delete", list(server_options.keys()), key="delete")
+            delete_server_name = st.selectbox(
+                "Select Server to Delete", list(server_options.keys()), key="delete")
             if st.button("Remove Server"):
                 server_id = server_options[delete_server_name]
                 if delete_server(server_id):
-                    st.success(f"Server '{delete_server_name}' successfully removed.")
+                    st.success(
+                        f"Server '{delete_server_name}' successfully removed.")
                     st.cache_data.clear()
                     st.rerun()

@@ -78,7 +78,7 @@ def test_server_appears_in_list(client, cleanup_servers):
         headers={"X-API-Key": "dev-secret-key"}
     )
     server_id = post_response.json()["id"]
-    
+
     # List servers
     get_response = client.get("/servers")
     assert get_response.status_code == 200
@@ -96,7 +96,7 @@ def test_get_server_by_id(client, cleanup_servers):
         headers={"X-API-Key": "dev-secret-key"}
     )
     server_id = post_response.json()["id"]
-    
+
     # Get specific server
     get_response = client.get(f"/servers/{server_id}")
     assert get_response.status_code == 200
@@ -120,7 +120,7 @@ def test_delete_server_without_key_returns_403(client, cleanup_servers):
         headers={"X-API-Key": "dev-secret-key"}
     )
     server_id = post_response.json()["id"]
-    
+
     # Try to delete without key
     delete_response = client.delete(f"/servers/{server_id}")
     assert delete_response.status_code == 403
@@ -135,14 +135,14 @@ def test_delete_server_with_valid_key(client, cleanup_servers):
         headers={"X-API-Key": "dev-secret-key"}
     )
     server_id = post_response.json()["id"]
-    
+
     # Delete with valid key
     delete_response = client.delete(
         f"/servers/{server_id}",
         headers={"X-API-Key": "dev-secret-key"}
     )
     assert delete_response.status_code == 200
-    
+
     # Verify it's gone
     get_response = client.get(f"/servers/{server_id}")
     assert get_response.status_code == 404
@@ -157,7 +157,7 @@ def test_port_validation(client, cleanup_servers):
         headers={"X-API-Key": "dev-secret-key"}
     )
     assert response.status_code == 422
-    
+
     # Test port > 65535
     response = client.post(
         "/servers",
@@ -170,19 +170,19 @@ def test_port_validation(client, cleanup_servers):
 def test_get_servers_filter_by_status(client, cleanup_servers):
     """Test filtering servers by status."""
     # Register a server
-    post_response = client.post(
+    client.post(
         "/servers",
         json={"name": "Test Server", "host": "localhost", "port": 8000},
         headers={"X-API-Key": "dev-secret-key"}
     )
-    
+
     # Filter by status
     response = client.get("/servers?status=unknown")
     assert response.status_code == 200
     data = response.json()
     assert len(data) == 1
     assert data[0]["status"] == "unknown"
-    
+
     # Filter by non-matching status
     response = client.get("/servers?status=UP")
     assert response.status_code == 200
@@ -199,7 +199,7 @@ def test_check_server_endpoint(client, cleanup_servers):
         headers={"X-API-Key": "dev-secret-key"}
     )
     server_id = post_response.json()["id"]
-    
+
     # Trigger health check
     response = client.post(f"/servers/{server_id}/check")
     assert response.status_code == 200
@@ -217,11 +217,15 @@ def test_multiple_servers_polling(client, cleanup_servers):
     for i in range(3):
         response = client.post(
             "/servers",
-            json={"name": f"Server {i}", "host": "localhost", "port": 8000 + i},
+            json={
+                "name": f"Server {i}",
+                "host": "localhost",
+                "port": 8000 + i
+            },
             headers={"X-API-Key": "dev-secret-key"}
         )
         assert response.status_code == 201
-    
+
     # List all servers
     response = client.get("/servers")
     assert response.status_code == 200
@@ -248,7 +252,13 @@ def test_server_base_url_method(cleanup_servers):
 def test_server_out_from_server(cleanup_servers):
     """Test ServerOut.from_server() conversion."""
     from api.models import Server, ServerOut
-    server = Server(id="test-123", name="My Server", host="localhost", port=8080, status="UP")
+    server = Server(
+        id="test-123",
+        name="My Server",
+        host="localhost",
+        port=8080,
+        status="UP"
+    )
     server_out = ServerOut.from_server(server)
     assert server_out.id == "test-123"
     assert server_out.name == "My Server"
@@ -273,12 +283,18 @@ def test_get_alert_config(client, cleanup_servers):
 
 def test_post_alert_config_without_key_returns_403(client, cleanup_servers):
     """Test POST /alerts/config without API key fails with 403."""
-    response = client.post("/alerts/config", json={"cpu_threshold": 50, "memory_threshold": 50})
+    response = client.post(
+        "/alerts/config",
+        json={"cpu_threshold": 50, "memory_threshold": 50}
+    )
     assert response.status_code == 403
 
 
 def test_post_alert_config_with_valid_key(client, cleanup_servers):
-    """Test POST /alerts/config with valid API key succeeds and updates values."""
+    """
+    Test POST /alerts/config with valid API key succeeds
+    and updates values.
+    """
     response = client.post(
         "/alerts/config",
         json={"cpu_threshold": 75.0, "memory_threshold": 80.0},
@@ -294,7 +310,7 @@ def test_websocket_metrics_format(client, cleanup_servers):
     """Test WebSocket /ws/metrics contains new metrics and alert fields."""
     from unittest.mock import patch
     from fastapi import WebSocketDisconnect
-    
+
     with patch("api.main.asyncio.wait_for", side_effect=WebSocketDisconnect):
         with client.websocket_connect("/ws/metrics") as websocket:
             data = websocket.receive_json()

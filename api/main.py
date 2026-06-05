@@ -3,7 +3,9 @@ import uuid
 from contextlib import asynccontextmanager
 from typing import Dict, Optional
 
-from fastapi import FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+from fastapi import (
+    FastAPI, Depends, HTTPException, WebSocket, WebSocketDisconnect, Query
+)
 from api.auth import verify_api_key
 from api.metrics import get_system_metrics, get_disk_partitions_metrics
 from api.models import Server, ServerIn, ServerOut, AlertConfig
@@ -24,13 +26,13 @@ async def lifespan(app: FastAPI):
     cancels it on shutdown.
     """
     global poll_task
-    
+
     # Startup
     poll_task = asyncio.create_task(run_poll_loop(servers, interval=10))
     print("Background polling task started")
-    
+
     yield
-    
+
     # Shutdown
     if poll_task:
         poll_task.cancel()
@@ -88,19 +90,23 @@ async def websocket_metrics(websocket: WebSocket):
     try:
         while True:
             metrics_data = get_system_metrics()
-            
+
             # Check thresholds for alert status
-            cpu_alert = metrics_data["cpu_percent"] > alert_config.cpu_threshold
-            mem_alert = metrics_data["memory_percent"] > alert_config.memory_threshold
-            
+            cpu_alert = (
+                metrics_data["cpu_percent"] > alert_config.cpu_threshold
+            )
+            mem_alert = (
+                metrics_data["memory_percent"] > alert_config.memory_threshold
+            )
+
             metrics_data["alert"] = cpu_alert or mem_alert
             metrics_data["alerts"] = {
                 "cpu": cpu_alert,
                 "memory": mem_alert
             }
-            
+
             await websocket.send_json(metrics_data)
-            
+
             # Wait for 1 second while monitoring for client disconnects
             try:
                 await asyncio.wait_for(websocket.receive_text(), timeout=1.0)
@@ -137,18 +143,18 @@ async def register_server(
 async def list_servers(status: Optional[str] = Query(None)):
     """
     List all servers, optionally filtered by status.
-    
+
     Args:
         status: Filter by status (UP, DEGRADED, DOWN, unknown)
-    
+
     Returns:
         List of servers
     """
     result = [ServerOut.from_server(s) for s in servers.values()]
-    
+
     if status:
         result = [s for s in result if s.status == status]
-    
+
     return result
 
 
@@ -157,7 +163,7 @@ async def get_server(server_id: str):
     """Get a specific server by ID."""
     if server_id not in servers:
         raise HTTPException(status_code=404, detail="Server not found")
-    
+
     return ServerOut.from_server(servers[server_id])
 
 
@@ -169,7 +175,7 @@ async def delete_server(
     """Delete a server from monitoring."""
     if server_id not in servers:
         raise HTTPException(status_code=404, detail="Server not found")
-    
+
     del servers[server_id]
     return {"message": "Server deleted"}
 
@@ -179,14 +185,14 @@ async def check_server(server_id: str):
     """Trigger an immediate health check for a specific server."""
     if server_id not in servers:
         raise HTTPException(status_code=404, detail="Server not found")
-    
+
     server = servers[server_id]
-    
+
     # Trigger async health check
     asyncio.create_task(
         __import__("api.poller", fromlist=["poll_server"]).poll_server(
             server_id, server.base_url(), servers
         )
     )
-    
+
     return {"message": f"Health check triggered for {server_id}"}
